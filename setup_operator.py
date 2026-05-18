@@ -302,7 +302,7 @@ def _do_install() -> None:
             with _lock:
                 _state["needs_python"] = True
             raise RuntimeError(
-                "No Python 3.10–3.12 found. "
+                "No Python 3.10+ found. "
                 "Install it from python.org (tick 'Add Python to PATH'), "
                 "then click Retry Install."
             )
@@ -318,11 +318,24 @@ def _do_install() -> None:
         # 3 — Upgrade pip
         _run([*_venv_pip(), "install", "--upgrade", "pip"], "Upgrading pip")
 
-        # 4 — Install PyTorch (CUDA 12.1 index; covers most modern GPUs)
-        _log("Installing PyTorch with CUDA 12.1 support — this may take several minutes…")
+        # 4 — Install PyTorch.
+        #     cu121 wheels only go up to Python 3.12; Python 3.13+ requires
+        #     PyTorch 2.6+ which is published under the cu124 index.
+        r = subprocess.run(
+            [venv_py, "-c", "import sys; print(sys.version_info.minor)"],
+            capture_output=True, text=True, timeout=5,
+        )
+        py_minor = int(r.stdout.strip() or "0")
+        if py_minor >= 13:
+            torch_index = "https://download.pytorch.org/whl/cu124"
+            cuda_label = "12.4"
+        else:
+            torch_index = "https://download.pytorch.org/whl/cu121"
+            cuda_label = "12.1"
+        _log(f"Installing PyTorch with CUDA {cuda_label} support — this may take several minutes…")
         _run(
             [*_venv_pip(), "install", "torch",
-             "--index-url", "https://download.pytorch.org/whl/cu121"],
+             "--index-url", torch_index],
             "Installing PyTorch",
         )
 
