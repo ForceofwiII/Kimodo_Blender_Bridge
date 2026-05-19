@@ -1247,6 +1247,103 @@ def _unique_name(base: str) -> str:
     return f"{base}_{i:02d}"
 
 
+def _sample_curve_arc_length(curve_obj, n_samples, depsgraph):
+    """Return n_samples evenly arc-length-spaced world-space positions along curve_obj."""
+    evaluated = curve_obj.evaluated_get(depsgraph)
+    mesh = evaluated.to_mesh()
+    mw = curve_obj.matrix_world
+
+    verts = [mw @ v.co for v in mesh.vertices]
+    evaluated.to_mesh_clear()
+
+    if len(verts) < 2:
+        return verts
+
+    # Build cumulative arc-length table
+    lengths = [0.0]
+    for i in range(len(verts) - 1):
+        lengths.append(lengths[-1] + (verts[i + 1] - verts[i]).length)
+    total = lengths[-1]
+
+    if total == 0.0:
+        return [verts[0]] * n_samples
+
+    samples = []
+    seg = 0
+    for i in range(n_samples):
+        t = (i / (n_samples - 1)) * total if n_samples > 1 else 0.0
+        while seg < len(lengths) - 2 and lengths[seg + 1] < t:
+            seg += 1
+        seg_len = lengths[seg + 1] - lengths[seg]
+        frac = (t - lengths[seg]) / seg_len if seg_len > 0 else 0.0
+        samples.append(verts[seg].lerp(verts[seg + 1], frac))
+
+    return samples
+
+
+class KIMODO_OT_SampleCurveAsWaypoints(Operator):
+    """Sample a curve into evenly-spaced Root XZ waypoint constraints"""
+    bl_idname  = "kimodo.sample_curve_as_waypoints"
+    bl_label   = "Sample Curve as Waypoints"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        s = context.scene.kimodo
+
+        if not s.path_curve:
+            self.report({'ERROR'}, "Set a curve object in the Path Curve field.")
+            return {'CANCELLED'}
+        if s.path_start_frame >= s.path_end_frame:
+            self.report({'ERROR'}, "Start Frame must be less than End Frame.")
+            return {'CANCELLED'}
+
+        n = s.path_waypoints
+        depsgraph = context.evaluated_depsgraph_get()
+        positions = _sample_curve_arc_length(s.path_curve, n, depsgraph)
+
+        if not positions:
+            self.report({'ERROR'}, "Could not sample any points from the curve.")
+            return {'CANCELLED'}
+
+        start_f = s.path_start_frame
+        end_f   = s.path_end_frame
+        color   = _CONSTRAINT_COLORS_RGBA['root2d']
+
+        saved_active   = context.active_object
+        saved_selected = list(context.selected_objects)
+        bpy.ops.object.select_all(action='DESELECT')
+
+        for i, pos in enumerate(positions):
+            frame = round(start_f + (end_f - start_f) * i / (n - 1)) if n > 1 else start_f
+
+            bpy.ops.object.empty_add(type='ARROWS', location=pos)
+            empty = context.active_object
+            empty.name = _unique_name(f"Kimodo_Path_{i + 1:02d}")
+            empty.color = color
+            empty.show_name = True
+            empty.empty_display_size = 0.15
+            empty["kimodo_constraint"] = True
+            empty["kimodo_type"]       = 'root2d'
+
+            item = s.motion_constraints.add()
+            item.constraint_type = 'root2d'
+            item.frame           = frame
+            item.marker_object   = empty
+            item.enabled         = True
+            item.label           = empty.name
+
+        s.constraint_index = len(s.motion_constraints) - 1
+
+        bpy.ops.object.select_all(action='DESELECT')
+        for o in saved_selected:
+            o.select_set(True)
+        if saved_active:
+            context.view_layer.objects.active = saved_active
+
+        self.report({'INFO'}, f"Added {n} path waypoints (frames {start_f}–{end_f})")
+        return {'FINISHED'}
+
+
 class KIMODO_OT_AddConstraint(Operator):
     """Add a Kimodo motion constraint marker at the 3D cursor"""
     bl_idname = "kimodo.add_constraint"
@@ -1826,6 +1923,8 @@ _classes = [
     KIMODO_OT_ReimportFromHistory,
     KIMODO_OT_ClearHistory,
     KIMODO_OT_GenerateVariations,
+    # Curve path operator
+    KIMODO_OT_SampleCurveAsWaypoints,
     # Constraint operators
     KIMODO_OT_AddConstraint,
     KIMODO_OT_LinkExistingAsConstraint,

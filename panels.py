@@ -448,6 +448,22 @@ class KIMODO_PT_Constraints(KIMODO_PanelBase, Panel):
             tip.label(text="Select an armature first, then click Full-Body.")
             tip.label(text="Or generate once — source arm will be duplicated.")
 
+        # --- Curve path waypoint sampler ---
+        layout.separator()
+        path_box = layout.box()
+        path_box.label(text="Sample Curve as Waypoints", icon='CURVE_DATA')
+        path_box.prop(s, "path_curve", text="Curve")
+        if s.path_curve:
+            prow = path_box.row(align=True)
+            prow.prop(s, "path_waypoints", text="Points")
+            prow.prop(s, "path_start_frame", text="Start F")
+            prow.prop(s, "path_end_frame", text="End F")
+            path_box.operator(
+                "kimodo.sample_curve_as_waypoints",
+                text=f"Sample {s.path_waypoints} Waypoints",
+                icon='NORMALIZE_FCURVES',
+            )
+
         layout.separator()
         n = len(s.motion_constraints)
         if n:

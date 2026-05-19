@@ -381,6 +381,33 @@ class KIMODO_SceneSettings(PropertyGroup):
         max=5,
     )
 
+    # --- Curve path sampling ---
+    path_curve: PointerProperty(
+        name="Path Curve",
+        description="Bezier or NURBS curve to sample as root XZ waypoints",
+        type=bpy.types.Object,
+        poll=lambda self, obj: obj.type == 'CURVE',
+    )
+    path_waypoints: IntProperty(
+        name="Waypoints",
+        description="Number of evenly-spaced waypoints to sample from the curve",
+        default=8,
+        min=2,
+        max=30,
+    )
+    path_start_frame: IntProperty(
+        name="Start Frame",
+        description="Timeline frame for the first waypoint",
+        default=1,
+        min=0,
+    )
+    path_end_frame: IntProperty(
+        name="End Frame",
+        description="Timeline frame for the last waypoint",
+        default=90,
+        min=1,
+    )
+
     # Preset name for saving
     preset_name: StringProperty(
         name="Preset Name",
