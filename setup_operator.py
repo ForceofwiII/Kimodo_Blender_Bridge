@@ -528,7 +528,7 @@ def heal_wrapper_path(python_exe: str) -> bool:
     except OSError:
         return False
 
-    m = re.search(r'(custom_path\s*=\s*r?")(["]*)(")' , text)
+    m = re.search(r'(custom_path\s*=\s*r?")([ ^"]*)(")', text)
     if not m:
         return False
     current = m.group(2)
