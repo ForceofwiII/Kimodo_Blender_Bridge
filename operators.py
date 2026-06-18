@@ -1483,9 +1483,9 @@ class KIMODO_OT_SampleCurveAsWaypoints(Operator):
         # ground plane, so the character walks *along* the path instead of
         # always facing +Y. Use a forward difference (and the previous
         # segment for the final point); reuse the last valid angle across any
-        # duplicate/zero-length samples.  angle = atan2(-dx, dy) follows
-        # Blender's Z-up convention where 0 = +Y forward, matching the
-        # heading_angle property consumed by build_constraints_json().
+        # duplicate/zero-length samples.  angle = atan2(dx, -dy) gives the
+        # heading_angle (consumed by build_constraints_json) that makes the
+        # character face forward along the curve in Kimodo's frame.
         headings = []
         last_angle = 0.0
         n_pos = len(positions)
@@ -1497,7 +1497,7 @@ class KIMODO_OT_SampleCurveAsWaypoints(Operator):
             else:
                 d = None                                  # single point: no direction
             if d is not None and math.hypot(d.x, d.y) > 1e-6:
-                last_angle = math.atan2(-d.x, d.y)
+                last_angle = math.atan2(d.x, -d.y)
             headings.append(last_angle)
 
         start_f = s.path_start_frame
