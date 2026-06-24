@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.5] — 2026-06-24
+
+### Fixed
+
+- **Generating motion a second time stopped the animation on Blender 4.x** (#37): Blender 4.4 introduced "slotted" Actions, where an object's `animation_data` must be bound to a specific Action *slot* for the keyframes to play. Each BVH import produced an Action whose slot had a randomized name, so when Kimodo swapped the Action on the reused source armature (i.e. on the second and later generations) Blender couldn't match the previous slot identifier and left no slot bound — the armature went still until the slot was reloaded by hand. Kimodo now gives every Action slot a stable name and binds it explicitly when transferring the Action, so playback survives repeated generations. Blender versions without slots (pre-4.4) fall back to the plain assignment as before.
+
 ## [1.5.4] — 2026-06-18
 
 ### Added

@@ -410,6 +410,51 @@ class KIMODO_OT_CancelGeneration(Operator):
 # Import helpers
 # ---------------------------------------------------------------------------
 
+# Stable slot name reused for every Kimodo action so the slot identifier stays
+# constant across generations (see _bind_action_with_slot / issue #37).
+_KIMODO_SLOT_NAME = "Kimodo"
+
+
+def _bind_action_with_slot(obj: bpy.types.Object, action: bpy.types.Action) -> None:
+    """Assign *action* to *obj* and bind its animation slot (Blender 4.4+).
+
+    Blender 4.4 introduced "slotted" Actions: an Action carries one or more
+    slots, and an object's ``animation_data`` must be bound to a specific slot
+    for the keyframes to drive the rig.  Setting ``animation_data.action`` only
+    auto-binds a slot whose identifier matches the previously used one
+    (``last_slot_identifier``).  BVH import gives every freshly imported Action a
+    slot with a randomized name, so when we swap actions on the reused source
+    armature (i.e. generating motion a second time) the identifiers never match:
+    no slot binds, and the armature stops animating until the slot is picked by
+    hand (issue #37).
+
+    To fix it we give the slot a stable name (so the identifier is constant
+    across generations) and bind it explicitly.  On Blender <4.4, where slots
+    don't exist, this degrades to a plain action assignment.
+    """
+    if obj.animation_data is None:
+        obj.animation_data_create()
+    ad = obj.animation_data
+
+    slots = getattr(action, "slots", None)
+    if slots is None or not hasattr(ad, "action_slot"):
+        # Pre-4.4 Blender: no slot system, a plain assignment is all there is.
+        ad.action = action
+        return
+
+    # Unify the slot name so the identifier stays constant across generations.
+    if len(slots):
+        try:
+            slots[0].name_display = _KIMODO_SLOT_NAME
+        except Exception:
+            pass  # name_display may be read-only on some builds — binding still works.
+
+    ad.action = action
+    # Assigning the action may already auto-bind a slot; only force it otherwise.
+    if len(slots) and ad.action_slot is None:
+        ad.action_slot = slots[0]
+
+
 def _apply_to_existing_source(s, new_arm: bpy.types.Object) -> bpy.types.Object:
     """
     If reuse_armature is set, transfer the action from new_arm to it and
@@ -419,11 +464,10 @@ def _apply_to_existing_source(s, new_arm: bpy.types.Object) -> bpy.types.Object:
     if not existing or existing.type != 'ARMATURE' or existing == new_arm:
         return new_arm  # nothing to reuse — keep the freshly imported one
 
-    # Transfer the action (the data-block survives object deletion).
+    # Transfer the action (the data-block survives object deletion).  Bind the
+    # slot explicitly so Blender 4.4+ keeps animating after the swap (issue #37).
     if new_arm.animation_data and new_arm.animation_data.action:
-        if not existing.animation_data:
-            existing.animation_data_create()
-        existing.animation_data.action = new_arm.animation_data.action
+        _bind_action_with_slot(existing, new_arm.animation_data.action)
 
     # Remove the temporary stand-in armature.
     bpy.data.objects.remove(new_arm, do_unlink=True)
