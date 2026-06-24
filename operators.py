@@ -1815,6 +1815,11 @@ class KIMODO_OT_RemoveConstraint(Operator):
     bl_idname = "kimodo.remove_constraint"
     bl_label = "Remove Constraint"
 
+    index: IntProperty(
+        name="Index",
+        description="Index of the constraint to remove (-1 = active)",
+        default=-1,
+    )
     delete_object: BoolProperty(
         name="Delete Marker Object",
         description="Also delete the Empty/object from the scene",
@@ -1823,7 +1828,7 @@ class KIMODO_OT_RemoveConstraint(Operator):
 
     def execute(self, context):
         s = context.scene.kimodo
-        idx = s.constraint_index
+        idx = self.index if self.index >= 0 else s.constraint_index
         if not (0 <= idx < len(s.motion_constraints)):
             return {'CANCELLED'}
 
