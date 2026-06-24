@@ -573,6 +573,7 @@ class KIMODO_PT_Constraints(KIMODO_PanelBase, Panel):
 
             # Remove
             op_rem = row.operator("kimodo.remove_constraint", text="", icon='X')
+            op_rem.index = i
             op_rem.delete_object = False
 
             # --- Object picker row — type-aware ---

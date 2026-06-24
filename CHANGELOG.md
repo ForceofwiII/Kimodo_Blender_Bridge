@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.5] — 2026-06-24
+
+### Fixed
+
+- **Generating motion a second time stopped the animation on Blender 4.x** (#37): Blender 4.4 introduced "slotted" Actions, where an object's `animation_data` must be bound to a specific Action *slot* for the keyframes to play. Each BVH import produced an Action whose slot had a randomized name, so when Kimodo swapped the Action on the reused source armature (i.e. on the second and later generations) Blender couldn't match the previous slot identifier and left no slot bound — the armature went still until the slot was reloaded by hand. Kimodo now gives every Action slot a stable name and binds it explicitly when transferring the Action, so playback survives repeated generations. Blender versions without slots (pre-4.4) fall back to the plain assignment as before.
+- **Re-importing piled up duplicate Actions/armature data**: Each time motion was imported onto the reused source armature (re-import from history, repeat generation), the previously assigned Action and the temporary import armature's data-block were left behind as unused orphans, accumulating in the .blend as `Action.001`, `Kimodo_Source.001`, `.002`, and so on. The orphaned Action and armature data are now removed when nothing else references them, so re-importing keeps the file clean.
+- **Deleting a constraint removed the wrong row**: The `X` button on a constraint always deleted the *active* row (usually the first one) instead of the row whose `X` was clicked, because it relied on the list's selection index. Each `X` now passes its own row index, so the clicked constraint is the one removed.
+
 ## [1.5.4] — 2026-06-18
 
 ### Added
