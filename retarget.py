@@ -189,10 +189,10 @@ def apply_retargeting_constraints(
 
         tgt_pbone = tgt_pose.bones.get(tgt_name)
         if not tgt_pbone:
-            warnings.append(f"Target bone '{tgt_name}' not found — skipped.")
+            warnings.append(f"未找到目标骨骼“{tgt_name}”，已跳过。")
             continue
         if src_name not in source_arm.data.bones:
-            warnings.append(f"Source bone '{src_name}' not in Kimodo armature — skipped.")
+            warnings.append(f"源骨骼“{src_name}”不在 Kimodo 骨架中，已跳过。")
             continue
 
         # Apply the per-bone 'Inherit Rotation' override on the armature data.
@@ -221,7 +221,7 @@ def apply_retargeting_constraints(
             _add_child_of(tgt_pbone, source_arm, src_name, rotation_only=True)
 
         else:
-            warnings.append(f"Unknown retarget mode '{mode}' for '{tgt_name}' — using Copy Rotation.")
+            warnings.append(f"“{tgt_name}”使用了未知重定向模式“{mode}”，已改用复制旋转。")
             _add_copy_rotation(tgt_pbone, source_arm, src_name, is_root)
 
         applied += 1
@@ -348,7 +348,7 @@ def bake_retargeted_animation(
         return True
 
     except Exception as e:
-        print(f"[Kimodo] Bake error: {e}")
+        print(f"[Kimodo] 烘焙错误：{e}")
         return False
 
 

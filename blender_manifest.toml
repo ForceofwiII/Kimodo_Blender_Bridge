@@ -3,11 +3,11 @@ schema_version = "1.0.0"
 id = "kimodo_blender_bridge"
 version = "1.5.5"
 name = "Kimodo Blender Bridge"
-tagline = "Generate human motion with NVIDIA Kimodo AI"
+tagline = "使用 NVIDIA Kimodo AI 生成角色动作"
 maintainer = "Lewdineer"
 type = "add-on"
 
-website = "https://github.com/nv-tlabs/kimodo"
+website = "https://github.com/ForceofwiII/Kimodo_Blender_Bridge"
 
 # Extension system was introduced in Blender 4.2
 blender_version_min = "4.2.0"

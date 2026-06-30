@@ -53,7 +53,7 @@ def _save_output(output, output_format, model, device, standard_tpose, prefix="k
         can_do_bvh = hasattr(skeleton, "name") and "somaskel" in skeleton.name
         if not can_do_bvh:
             _out({"status": "progress",
-                  "message": "BVH not supported for this model — using NPZ."})
+                  "message": "此模型不支持 BVH，已改用 NPZ。"})
 
     suffix = ".bvh" if can_do_bvh else ".npz"
     fd, out_path = tempfile.mkstemp(suffix=suffix, prefix=prefix)
@@ -93,7 +93,7 @@ def _load_constraints(constraints_json, model):
             constraint_lst = load_constraints_lst(tmp_con, model.skeleton)
         except Exception as exc:
             _out({"status": "progress",
-                  "message": f"Warning: constraints skipped ({exc})"})
+                  "message": f"警告：已跳过约束（{exc}）"})
         finally:
             if tmp_con and os.path.exists(tmp_con):
                 try:
@@ -133,7 +133,7 @@ def _generate(req: dict, model, device: str) -> None:
             prompt_set = {text, "", " "}
             prompt_set = {p for p in prompt_set if p.strip()}
             if prompt_set:
-                _out({"status": "progress", "message": "Pre-encoding text prompt (CPU Offload)..."})
+                _out({"status": "progress", "message": "正在预编码文本提示词（CPU 卸载）..."})
                 model.text_encoder.reload()
                 import torch
                 if torch.cuda.is_available():
@@ -144,10 +144,10 @@ def _generate(req: dict, model, device: str) -> None:
                 memory_manager.purge_encoder_completely()
                 memory_manager.touch_and_move(model.model_name, device)
         except Exception as exc:
-            _out({"status": "progress", "message": f"Warning: offload prewarm failed ({exc})"})
+            _out({"status": "progress", "message": f"警告：卸载预热失败（{exc}）"})
 
     _out({"status": "progress",
-          "message": f"Running diffusion ({diffusion_steps} steps)…"})
+          "message": f"正在运行扩散生成（{diffusion_steps} 步）…"})
 
     output = model(
         [text],
@@ -161,7 +161,7 @@ def _generate(req: dict, model, device: str) -> None:
         return_numpy=True,
     )
 
-    _out({"status": "progress", "message": "Saving output file…"})
+    _out({"status": "progress", "message": "正在保存输出文件…"})
     out_path = _save_output(output, output_format, model, device, standard_tpose)
     _out({"status": "done", "path": out_path})
 
@@ -181,7 +181,7 @@ def _generate_multi(req: dict, model, device: str) -> None:
 
     if not prompts or not durations or len(prompts) != len(durations):
         _out({"status": "error",
-              "message": "generate_multi requires non-empty 'prompts' and 'durations' lists of equal length."})
+              "message": "generate_multi 需要非空且长度一致的 prompts 和 durations 列表。"})
         return
 
     # Normalise all prompts
@@ -204,7 +204,7 @@ def _generate_multi(req: dict, model, device: str) -> None:
             prompt_set.add(" ")
             prompt_set = {p for p in prompt_set if p.strip()}
             if prompt_set:
-                _out({"status": "progress", "message": "Pre-encoding text prompts (CPU Offload)..."})
+                _out({"status": "progress", "message": "正在预编码多个文本提示词（CPU 卸载）..."})
                 model.text_encoder.reload()
                 import torch
                 if torch.cuda.is_available():
@@ -215,11 +215,11 @@ def _generate_multi(req: dict, model, device: str) -> None:
                 memory_manager.purge_encoder_completely()
                 memory_manager.touch_and_move(model.model_name, device)
         except Exception as exc:
-            _out({"status": "progress", "message": f"Warning: offload prewarm failed ({exc})"})
+            _out({"status": "progress", "message": f"警告：卸载预热失败（{exc}）"})
 
     n = len(texts)
     _out({"status": "progress",
-          "message": f"Running multi-prompt diffusion ({n} segments, {diffusion_steps} steps)…"})
+          "message": f"正在运行多提示词扩散生成（{n} 个片段，{diffusion_steps} 步）…"})
 
     output = model(
         texts,
@@ -234,7 +234,7 @@ def _generate_multi(req: dict, model, device: str) -> None:
         seeds=seeds,
     )
 
-    _out({"status": "progress", "message": "Saving combined output file…"})
+    _out({"status": "progress", "message": "正在保存合并后的输出文件…"})
     out_path = _save_output(output, output_format, model, device, standard_tpose,
                             prefix="kimodo_multi_")
     _out({"status": "done", "path": out_path})
@@ -246,16 +246,16 @@ def _generate_multi(req: dict, model, device: str) -> None:
 
 def main() -> None:
     import argparse
-    parser = argparse.ArgumentParser(description="Kimodo Blender Bridge Server")
+    parser = argparse.ArgumentParser(description="Kimodo Blender 桥接服务")
     parser.add_argument("--model",  default="Kimodo-SOMA-RP-v1",
-                        help="Kimodo model name (e.g. Kimodo-SOMA-RP-v1)")
+                        help="Kimodo 模型名称（例如 Kimodo-SOMA-RP-v1）")
     parser.add_argument("--device", default=None,
-                        help="Compute device override (e.g. cuda:0, cpu)")
+                        help="覆盖计算设备（例如 cuda:0、cpu）")
     parser.add_argument("--offload", action="store_true",
-                        help="Enable CPU/Disk offloading for low memory")
+                        help="为低内存环境启用 CPU / 磁盘卸载")
     args = parser.parse_args()
 
-    _out({"status": "loading", "message": "Importing Kimodo…"})
+    _out({"status": "loading", "message": "正在导入 Kimodo…"})
 
     try:
         import torch
@@ -263,14 +263,14 @@ def main() -> None:
     except ImportError as exc:
         _out({"status": "error",
               "message": (
-                  f"Kimodo not found in this Python environment: {exc}\n"
-                  "Make sure you point the plugin at the correct Python executable."
+                  f"当前 Python 环境中没有找到 Kimodo：{exc}\n"
+                  "请确认插件指向了正确的 Python 可执行文件。"
               )})
         sys.exit(1)
 
     device = args.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
     _out({"status": "loading",
-          "message": f"Loading {args.model} on {device}…"})
+          "message": f"正在 {device} 上加载 {args.model}…"})
 
     try:
         model = load_model(args.model, device=device)
@@ -288,10 +288,10 @@ def main() -> None:
                     memory_manager.register_encoder(model.text_encoder)
                     model.text_encoder = CachedTextEncoder(model.text_encoder, model_name=args.model)
             except Exception as exc:
-                print(f"[Bridge Server] Warning setting up MemoryManager: {exc}", file=sys.stderr)
+                print(f"[Bridge Server] 设置 MemoryManager 时出现警告：{exc}", file=sys.stderr)
     except Exception as exc:
         _out({"status": "error",
-              "message": f"Model load failed: {exc}\n{traceback.format_exc()}"})
+              "message": f"模型加载失败：{exc}\n{traceback.format_exc()}"})
         sys.exit(1)
 
     _out({"status": "ready",
@@ -306,7 +306,7 @@ def main() -> None:
         try:
             req = json.loads(raw)
         except json.JSONDecodeError as exc:
-            _out({"status": "error", "message": f"Bad JSON: {exc}"})
+            _out({"status": "error", "message": f"JSON 格式错误：{exc}"})
             continue
 
         cmd = req.get("cmd", "")
@@ -335,7 +335,7 @@ def main() -> None:
             break
 
         else:
-            _out({"status": "error", "message": f"Unknown cmd: {cmd!r}"})
+            _out({"status": "error", "message": f"未知命令：{cmd!r}"})
 
 
 if __name__ == "__main__":

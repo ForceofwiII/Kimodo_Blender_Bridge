@@ -77,16 +77,15 @@ def _import_bvh(**kwargs):
     """
     if not _ensure_bvh_importer():
         raise RuntimeError(
-            "Blender's BVH importer is not available. Enable "
-            "'Import-Export: BioVision Motion Capture (BVH)' under "
-            "Edit > Preferences > Add-ons (search 'BVH'). On Blender 5.0+ you "
-            "may need to install it from Get Extensions first."
+            "Blender 的 BVH 导入器不可用。请在“编辑 > 偏好设置 > 插件”中启用"
+            "“Import-Export: BioVision Motion Capture (BVH)”（搜索 BVH）。"
+            "Blender 5.0+ 可能需要先从“获取扩展”安装。"
         )
     try:
         return bpy.ops.import_anim.bvh(**kwargs)
     except (AttributeError, RuntimeError) as e:
         # Operator vanished between the check and the call, or import failed.
-        raise RuntimeError(f"BVH import failed: {e}")
+        raise RuntimeError(f"BVH 导入失败：{e}")
 
 
 # ---------------------------------------------------------------------------
@@ -152,7 +151,7 @@ def _reset_start_state():
 class KIMODO_OT_StartKimodo(Operator):
     """Load the Kimodo model in the background and keep it ready for generation"""
     bl_idname = "kimodo.start_kimodo"
-    bl_label  = "Start Kimodo"
+    bl_label  = "启动 Kimodo"
 
     _timer  = None
     _thread = None
@@ -171,13 +170,13 @@ class KIMODO_OT_StartKimodo(Operator):
         s = context.scene.kimodo
 
         if sc.is_running():
-            self.report({'INFO'}, "Kimodo is already running.")
+            self.report({'INFO'}, "Kimodo 已经在运行。")
             return {'CANCELLED'}
 
         _reset_start_state()
         _start_state["running"] = True
         s.is_connected      = False
-        s.connection_status = "Starting…"
+        s.connection_status = "正在启动…"
 
         # Resolve the Python hint on the main thread. When the scene has no
         # explicit path, fall back to the remembered managed-venv location
@@ -224,11 +223,11 @@ class KIMODO_OT_StartKimodo(Operator):
         if _start_state["success"]:
             s.is_connected      = True
             s.connection_status = _start_state["message"]
-            self.report({'INFO'}, f"Kimodo ready: {_start_state['message']}")
+            self.report({'INFO'}, f"Kimodo 已就绪：{_start_state['message']}")
         else:
             s.is_connected      = False
             s.connection_status = _start_state["message"]
-            self.report({'ERROR'}, f"Kimodo failed to start: {_start_state['message']}")
+            self.report({'ERROR'}, f"Kimodo 启动失败：{_start_state['message']}")
 
         return {'FINISHED'}
 
@@ -239,14 +238,14 @@ class KIMODO_OT_StartKimodo(Operator):
 class KIMODO_OT_StopKimodo(Operator):
     """Shut down the Kimodo bridge process and free GPU memory"""
     bl_idname = "kimodo.stop_kimodo"
-    bl_label  = "Stop Kimodo"
+    bl_label  = "停止 Kimodo"
 
     def execute(self, context):
         sc.stop()
         s = context.scene.kimodo
         s.is_connected      = False
-        s.connection_status = "Stopped"
-        self.report({'INFO'}, "Kimodo bridge stopped.")
+        s.connection_status = "已停止"
+        self.report({'INFO'}, "Kimodo 桥接进程已停止。")
         return {'FINISHED'}
 
 
@@ -257,7 +256,7 @@ class KIMODO_OT_StopKimodo(Operator):
 class KIMODO_OT_Generate(Operator):
     """Generate motion with Kimodo. Runs in background thread."""
     bl_idname = "kimodo.generate"
-    bl_label = "Generate Motion"
+    bl_label = "生成动作"
 
     _timer = None
     _thread = None
@@ -285,10 +284,10 @@ class KIMODO_OT_Generate(Operator):
         s = context.scene.kimodo
 
         if not sc.is_running():
-            self.report({'WARNING'}, "Kimodo is not running — click 'Start Kimodo' first.")
+            self.report({'WARNING'}, "Kimodo 尚未运行，请先点击“启动 Kimodo”。")
             return {'CANCELLED'}
         if s.is_generating:
-            self.report({'WARNING'}, "Already generating — please wait.")
+            self.report({'WARNING'}, "正在生成，请稍候。")
             return {'CANCELLED'}
 
         # Resolve seed (upper bound must stay within a 32-bit IntProperty)
@@ -299,7 +298,7 @@ class KIMODO_OT_Generate(Operator):
         _reset_state()
         _generation_state["running"] = True
         s.is_generating = True
-        s.generation_progress = "Starting…"
+        s.generation_progress = "正在启动…"
 
         # Build constraints JSON if any are defined
         constraints_json = None
@@ -315,7 +314,7 @@ class KIMODO_OT_Generate(Operator):
                 constraints_json = json.dumps(constraints_data)
                 s.constraint_json_preview = constraints_json
             except Exception as e:
-                self.report({'WARNING'}, f"Constraint build failed (generating without): {e}")
+                self.report({'WARNING'}, f"约束构建失败，将不带约束生成：{e}")
 
         self._thread = threading.Thread(
             target=self._run_generation,
@@ -358,33 +357,33 @@ class KIMODO_OT_Generate(Operator):
         s.is_generating = False
 
         if _generation_state["cancelled"]:
-            s.generation_progress = "Cancelled"
-            self.report({'INFO'}, "Generation cancelled — result discarded.")
+            s.generation_progress = "已取消"
+            self.report({'INFO'}, "生成已取消，结果已丢弃。")
         elif _generation_state["success"]:
             file_path = _generation_state["result"]
             s.last_bvh_path = file_path
-            s.generation_progress = "Done ✓"
+            s.generation_progress = "完成 ✓"
             _push_history(s, s.prompt, self._resolved_seed, s.duration, file_path)
             # Auto-import if BVH
             ext = os.path.splitext(file_path)[1].lower()
             if ext == ".bvh":
                 result = bpy.ops.kimodo.import_bvh('EXEC_DEFAULT', filepath=file_path)
                 if 'FINISHED' in result:
-                    self.report({'INFO'}, f"Motion generated and imported from {os.path.basename(file_path)}")
+                    self.report({'INFO'}, f"动作已生成并从 {os.path.basename(file_path)} 导入。")
                 else:
-                    self.report({'WARNING'}, f"Motion generated ({os.path.basename(file_path)}) but BVH import failed — see error above.")
+                    self.report({'WARNING'}, f"动作已生成（{os.path.basename(file_path)}），但 BVH 导入失败，请查看上方错误。")
             else:
-                self.report({'INFO'}, f"Motion saved to {file_path} (NPZ — import manually)")
+                self.report({'INFO'}, f"动作已保存到 {file_path}（NPZ，需要手动导入）")
         else:
-            s.generation_progress = "Failed ✗"
-            self.report({'ERROR'}, f"Generation failed: {_generation_state['result']}")
+            s.generation_progress = "失败 ✗"
+            self.report({'ERROR'}, f"生成失败：{_generation_state['result']}")
 
         return {'FINISHED'}
 
     def cancel(self, context):
         context.window_manager.event_timer_remove(self._timer)
         context.scene.kimodo.is_generating = False
-        context.scene.kimodo.generation_progress = "Cancelled"
+        context.scene.kimodo.generation_progress = "已取消"
         _generation_state["running"] = False
 
 
@@ -393,16 +392,16 @@ class KIMODO_OT_CancelGeneration(Operator):
     in-flight result is discarded when it arrives; a new generation can start
     once the bridge finishes the abandoned job."""
     bl_idname = "kimodo.cancel_generation"
-    bl_label = "Cancel"
+    bl_label = "取消"
 
     def execute(self, context):
         if not context.scene.kimodo.is_generating:
-            self.report({'INFO'}, "Nothing is generating.")
+            self.report({'INFO'}, "当前没有正在生成的任务。")
             return {'CANCELLED'}
         _generation_state["cancelled"] = True
         sc.request_cancel()
-        context.scene.kimodo.generation_progress = "Cancelling…"
-        self.report({'INFO'}, "Cancellation requested — result will be discarded.")
+        context.scene.kimodo.generation_progress = "正在取消…"
+        self.report({'INFO'}, "已请求取消，生成结果将被丢弃。")
         return {'FINISHED'}
 
 
@@ -494,7 +493,7 @@ def _apply_to_existing_source(s, new_arm: bpy.types.Object) -> bpy.types.Object:
 class KIMODO_OT_ImportBVH(Operator):
     """Import a BVH file and register it as the Kimodo source armature"""
     bl_idname = "kimodo.import_bvh"
-    bl_label = "Import BVH"
+    bl_label = "导入 BVH"
 
     filepath: StringProperty(subtype='FILE_PATH')
 
@@ -503,7 +502,7 @@ class KIMODO_OT_ImportBVH(Operator):
         path = self.filepath or s.last_bvh_path
 
         if not path or not os.path.exists(path):
-            self.report({'ERROR'}, f"File not found: {path}")
+            self.report({'ERROR'}, f"找不到文件：{path}")
             return {'CANCELLED'}
 
         # Remember which objects exist before import
@@ -539,9 +538,9 @@ class KIMODO_OT_ImportBVH(Operator):
             new_arm = _apply_to_existing_source(s, new_arm)
             s.source_armature = new_arm
             s.reuse_armature = new_arm
-            self.report({'INFO'}, f"Imported '{new_arm.name}' with {len(new_arm.data.bones)} bones")
+            self.report({'INFO'}, f"已导入“{new_arm.name}”，包含 {len(new_arm.data.bones)} 根骨骼。")
         else:
-            self.report({'WARNING'}, "BVH imported but no armature found in scene.")
+            self.report({'WARNING'}, "BVH 已导入，但场景中没有找到骨架。")
 
         return {'FINISHED'}
 
@@ -561,15 +560,15 @@ class KIMODO_OT_ImportBVH(Operator):
 class KIMODO_OT_AutoMapBones(Operator):
     """Auto-match bone names between Kimodo source and target armature"""
     bl_idname = "kimodo.auto_map_bones"
-    bl_label = "Auto-Match Bones"
+    bl_label = "自动匹配骨骼"
 
     def execute(self, context):
         s = context.scene.kimodo
         if not s.source_armature:
-            self.report({'ERROR'}, "Set the Source Armature first.")
+            self.report({'ERROR'}, "请先设置源骨架。")
             return {'CANCELLED'}
         if not s.target_armature:
-            self.report({'ERROR'}, "Set the Target Armature first.")
+            self.report({'ERROR'}, "请先设置目标骨架。")
             return {'CANCELLED'}
 
         pairs = rt.auto_build_mapping(s.source_armature, s.target_armature, s.model_type)
@@ -581,14 +580,14 @@ class KIMODO_OT_AutoMapBones(Operator):
             item.target_bone = tgt
             item.enabled = True
 
-        self.report({'INFO'}, f"Auto-matched {len(pairs)} bone pairs")
+        self.report({'INFO'}, f"已自动匹配 {len(pairs)} 对骨骼。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_AddBoneMapping(Operator):
     """Add a new empty bone mapping row"""
     bl_idname = "kimodo.add_bone_mapping"
-    bl_label = "Add Bone Pair"
+    bl_label = "添加骨骼对"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -603,7 +602,7 @@ class KIMODO_OT_AddBoneMapping(Operator):
 class KIMODO_OT_RemoveBoneMapping(Operator):
     """Remove the selected bone mapping row"""
     bl_idname = "kimodo.remove_bone_mapping"
-    bl_label = "Remove Bone Pair"
+    bl_label = "移除骨骼对"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -617,18 +616,18 @@ class KIMODO_OT_RemoveBoneMapping(Operator):
 class KIMODO_OT_ApplyRetargeting(Operator):
     """Apply Copy Rotation/Location constraints to drive target rig from Kimodo motion"""
     bl_idname = "kimodo.apply_retargeting"
-    bl_label = "Apply Retargeting"
+    bl_label = "应用重定向"
 
     def execute(self, context):
         s = context.scene.kimodo
         if not s.source_armature:
-            self.report({'ERROR'}, "Set Source Armature.")
+            self.report({'ERROR'}, "请设置源骨架。")
             return {'CANCELLED'}
         if not s.target_armature:
-            self.report({'ERROR'}, "Set Target Armature.")
+            self.report({'ERROR'}, "请设置目标骨架。")
             return {'CANCELLED'}
         if not s.bone_mappings:
-            self.report({'ERROR'}, "No bone mappings defined. Use Auto-Match or add manually.")
+            self.report({'ERROR'}, "尚未定义骨骼映射。请使用自动匹配或手动添加。")
             return {'CANCELLED'}
 
         pairs = [(item.source_bone, item.target_bone, item.enabled,
@@ -642,34 +641,34 @@ class KIMODO_OT_ApplyRetargeting(Operator):
         for w in warnings:
             self.report({'WARNING'}, w)
 
-        self.report({'INFO'}, f"Applied retargeting constraints to {n} bones")
+        self.report({'INFO'}, f"已为 {n} 根骨骼应用重定向约束。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_RemoveRetargeting(Operator):
     """Remove all Kimodo retargeting constraints from target armature"""
     bl_idname = "kimodo.remove_retargeting"
-    bl_label = "Remove Constraints"
+    bl_label = "移除约束"
 
     def execute(self, context):
         s = context.scene.kimodo
         if not s.target_armature:
-            self.report({'ERROR'}, "Set Target Armature.")
+            self.report({'ERROR'}, "请设置目标骨架。")
             return {'CANCELLED'}
         n = rt.remove_retargeting_constraints(s.target_armature)
-        self.report({'INFO'}, f"Removed {n} Kimodo constraints")
+        self.report({'INFO'}, f"已移除 {n} 个 Kimodo 约束。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_BakeRetargeting(Operator):
     """Bake the retargeted animation into keyframes and remove constraints"""
     bl_idname = "kimodo.bake_retargeting"
-    bl_label = "Bake Animation"
+    bl_label = "烘焙动画"
 
     def execute(self, context):
         s = context.scene.kimodo
         if not s.target_armature:
-            self.report({'ERROR'}, "Set Target Armature.")
+            self.report({'ERROR'}, "请设置目标骨架。")
             return {'CANCELLED'}
 
         success = rt.bake_retargeted_animation(
@@ -678,9 +677,9 @@ class KIMODO_OT_BakeRetargeting(Operator):
             s.bake_end_frame,
         )
         if success:
-            self.report({'INFO'}, "Animation baked successfully ✓")
+            self.report({'INFO'}, "动画烘焙成功 ✓")
         else:
-            self.report({'ERROR'}, "Bake failed — check console for details")
+            self.report({'ERROR'}, "烘焙失败，请查看控制台详情。")
         return {'FINISHED'} if success else {'CANCELLED'}
 
 
@@ -691,14 +690,14 @@ class KIMODO_OT_BakeRetargeting(Operator):
 class KIMODO_OT_SavePreset(Operator):
     """Save current bone mapping as a named preset"""
     bl_idname = "kimodo.save_preset"
-    bl_label = "Save Preset"
+    bl_label = "保存预设"
 
     def execute(self, context):
         s = context.scene.kimodo
         prefs = context.preferences.addons[__package__].preferences
         name = s.preset_name.strip()
         if not name:
-            self.report({'ERROR'}, "Enter a preset name first.")
+            self.report({'ERROR'}, "请先输入预设名称。")
             return {'CANCELLED'}
 
         pairs = [{"src": item.source_bone, "tgt": item.target_bone,
@@ -706,14 +705,14 @@ class KIMODO_OT_SavePreset(Operator):
                   "inherit_rot": item.inherit_rotation}
                  for item in s.bone_mappings]
         rt.save_preset(prefs, name, pairs)
-        self.report({'INFO'}, f"Preset '{name}' saved ({len(pairs)} bone pairs)")
+        self.report({'INFO'}, f"预设“{name}”已保存（{len(pairs)} 对骨骼）。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_LoadPreset(Operator):
     """Load a saved bone mapping preset"""
     bl_idname = "kimodo.load_preset"
-    bl_label = "Load Preset"
+    bl_label = "加载预设"
 
     preset_name: StringProperty()
 
@@ -724,7 +723,7 @@ class KIMODO_OT_LoadPreset(Operator):
 
         pairs = rt.load_preset(prefs, name)
         if pairs is None:
-            self.report({'ERROR'}, f"Preset '{name}' not found.")
+            self.report({'ERROR'}, f"未找到预设“{name}”。")
             return {'CANCELLED'}
 
         s.bone_mappings.clear()
@@ -736,14 +735,14 @@ class KIMODO_OT_LoadPreset(Operator):
             item.retarget_mode   = p.get("mode", "COPY_ROTATION")
             item.inherit_rotation = p.get("inherit_rot", True)
 
-        self.report({'INFO'}, f"Loaded preset '{name}' ({len(pairs)} bone pairs)")
+        self.report({'INFO'}, f"已加载预设“{name}”（{len(pairs)} 对骨骼）。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_DeletePreset(Operator):
     """Delete a saved bone mapping preset"""
     bl_idname = "kimodo.delete_preset"
-    bl_label = "Delete Preset"
+    bl_label = "删除预设"
 
     preset_name: StringProperty()
 
@@ -755,9 +754,9 @@ class KIMODO_OT_DeletePreset(Operator):
             if name in presets:
                 del presets[name]
                 prefs.saved_presets = json.dumps(presets)
-                self.report({'INFO'}, f"Deleted preset '{name}'")
+                self.report({'INFO'}, f"已删除预设“{name}”。")
             else:
-                self.report({'WARNING'}, f"Preset '{name}' not found")
+                self.report({'WARNING'}, f"未找到预设“{name}”。")
         except Exception as e:
             self.report({'ERROR'}, str(e))
         return {'FINISHED'}
@@ -766,7 +765,7 @@ class KIMODO_OT_DeletePreset(Operator):
 class KIMODO_OT_ExportPresetFile(Operator):
     """Export the current bone mapping to a JSON file"""
     bl_idname  = "kimodo.export_preset_file"
-    bl_label   = "Export Bone Map"
+    bl_label   = "导出骨骼映射"
 
     filepath:   StringProperty(subtype='FILE_PATH')
     filename_ext = ".json"
@@ -787,9 +786,9 @@ class KIMODO_OT_ExportPresetFile(Operator):
         try:
             with open(self.filepath, "w", encoding="utf-8") as f:
                 json.dump(pairs, f, indent=2)
-            self.report({'INFO'}, f"Exported {len(pairs)} bone pairs to {self.filepath}")
+            self.report({'INFO'}, f"已将 {len(pairs)} 对骨骼导出到 {self.filepath}。")
         except Exception as e:
-            self.report({'ERROR'}, f"Export failed: {e}")
+            self.report({'ERROR'}, f"导出失败：{e}")
             return {'CANCELLED'}
         return {'FINISHED'}
 
@@ -797,7 +796,7 @@ class KIMODO_OT_ExportPresetFile(Operator):
 class KIMODO_OT_ImportPresetFile(Operator):
     """Import a bone mapping from a JSON file"""
     bl_idname  = "kimodo.import_preset_file"
-    bl_label   = "Import Bone Map"
+    bl_label   = "导入骨骼映射"
 
     filepath:   StringProperty(subtype='FILE_PATH')
     filename_ext = ".json"
@@ -813,10 +812,10 @@ class KIMODO_OT_ImportPresetFile(Operator):
             with open(self.filepath, "r", encoding="utf-8") as f:
                 pairs = json.load(f)
             if not isinstance(pairs, list):
-                self.report({'ERROR'}, "File does not contain a JSON array.")
+                self.report({'ERROR'}, "文件内容不是 JSON 数组。")
                 return {'CANCELLED'}
         except Exception as e:
-            self.report({'ERROR'}, f"Import failed: {e}")
+            self.report({'ERROR'}, f"导入失败：{e}")
             return {'CANCELLED'}
 
         s.bone_mappings.clear()
@@ -828,7 +827,7 @@ class KIMODO_OT_ImportPresetFile(Operator):
             item.retarget_mode   = p.get("mode", "COPY_ROTATION")
             item.inherit_rotation = p.get("inherit_rot", True)
 
-        self.report({'INFO'}, f"Imported {len(pairs)} bone pairs from {self.filepath}")
+        self.report({'INFO'}, f"已从 {self.filepath} 导入 {len(pairs)} 对骨骼。")
         return {'FINISHED'}
 
 
@@ -842,7 +841,7 @@ from .properties import _SEGMENT_COLORS
 class KIMODO_OT_SelectSegment(Operator):
     """Set a segment as the active one"""
     bl_idname = "kimodo.select_segment"
-    bl_label  = "Select Segment"
+    bl_label  = "选择片段"
     index: IntProperty()
 
     def execute(self, context):
@@ -855,7 +854,7 @@ class KIMODO_OT_SelectSegment(Operator):
 class KIMODO_OT_RemoveSegmentByIndex(Operator):
     """Remove a specific segment by index"""
     bl_idname = "kimodo.remove_segment_by_index"
-    bl_label  = "Remove Segment"
+    bl_label  = "移除片段"
     index: IntProperty()
 
     def execute(self, context):
@@ -870,7 +869,7 @@ class KIMODO_OT_RemoveSegmentByIndex(Operator):
 class KIMODO_OT_AddSegment(Operator):
     """Add a new motion segment at the current frame"""
     bl_idname = "kimodo.add_segment"
-    bl_label = "Add Segment"
+    bl_label = "添加片段"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -908,7 +907,7 @@ class KIMODO_OT_AddSegment(Operator):
 class KIMODO_OT_RemoveSegment(Operator):
     """Remove the selected motion segment"""
     bl_idname = "kimodo.remove_segment"
-    bl_label = "Remove Segment"
+    bl_label = "移除片段"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -923,7 +922,7 @@ class KIMODO_OT_RemoveSegment(Operator):
 class KIMODO_OT_DuplicateSegment(Operator):
     """Duplicate the selected segment and place it immediately after"""
     bl_idname = "kimodo.duplicate_segment"
-    bl_label = "Duplicate Segment"
+    bl_label = "复制片段"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -951,7 +950,7 @@ class KIMODO_OT_DuplicateSegment(Operator):
 class KIMODO_OT_MoveSegmentUp(Operator):
     """Move segment up in list (earlier in sequence)"""
     bl_idname = "kimodo.move_segment_up"
-    bl_label = "Move Up"
+    bl_label = "上移"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -965,7 +964,7 @@ class KIMODO_OT_MoveSegmentUp(Operator):
 class KIMODO_OT_MoveSegmentDown(Operator):
     """Move segment down in list (later in sequence)"""
     bl_idname = "kimodo.move_segment_down"
-    bl_label = "Move Down"
+    bl_label = "下移"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -979,7 +978,7 @@ class KIMODO_OT_MoveSegmentDown(Operator):
 class KIMODO_OT_SyncSeeds(Operator):
     """Sync all segment seeds with global seed setting"""
     bl_idname = "kimodo.sync_seeds"
-    bl_label = "Sync Seeds"
+    bl_label = "同步种子"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -989,14 +988,14 @@ class KIMODO_OT_SyncSeeds(Operator):
         for seg in s.motion_segments:
             seg.seed = global_seed
             
-        self.report({'INFO'}, f"Updated {len(s.motion_segments)} segments with seed {global_seed}")
+        self.report({'INFO'}, f"已将 {len(s.motion_segments)} 个片段更新为种子 {global_seed}。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_GenerateSegment(Operator):
     """Generate motion for the selected segment"""
     bl_idname = "kimodo.generate_segment"
-    bl_label = "Generate Selected"
+    bl_label = "生成选中片段"
 
     _timer  = None
     _thread = None
@@ -1007,13 +1006,13 @@ class KIMODO_OT_GenerateSegment(Operator):
         idx = s.segment_index
 
         if not (0 <= idx < len(s.motion_segments)):
-            self.report({'ERROR'}, "No segment selected.")
+            self.report({'ERROR'}, "未选择片段。")
             return {'CANCELLED'}
         if not sc.is_running():
-            self.report({'WARNING'}, "Kimodo is not running — click 'Start Kimodo' first.")
+            self.report({'WARNING'}, "Kimodo 尚未运行，请先点击“启动 Kimodo”。")
             return {'CANCELLED'}
         if s.is_generating:
-            self.report({'WARNING'}, "Already generating — please wait.")
+            self.report({'WARNING'}, "正在生成，请稍候。")
             return {'CANCELLED'}
 
         seg = s.motion_segments[idx]
@@ -1033,12 +1032,12 @@ class KIMODO_OT_GenerateSegment(Operator):
         constraints_json, con_err = _build_segment_constraints(context, seg)
         if con_err:
             self.report({'WARNING'},
-                        f"Constraint build failed (generating without): {con_err}")
+                        f"约束构建失败，将不带约束生成：{con_err}")
 
         _reset_state()
         _generation_state["running"] = True
         s.is_generating = True
-        s.generation_progress = f"Generating: {seg.prompt[:40]}…"
+        s.generation_progress = f"正在生成：{seg.prompt[:40]}…"
         s.generating_segment_index = self._target_segment_idx
 
         self._thread = threading.Thread(
@@ -1090,14 +1089,14 @@ class KIMODO_OT_GenerateSegment(Operator):
         s.generating_segment_index = -1
 
         if _generation_state["cancelled"]:
-            s.generation_progress = "Cancelled"
-            self.report({'INFO'}, "Generation cancelled — result discarded.")
+            s.generation_progress = "已取消"
+            self.report({'INFO'}, "生成已取消，结果已丢弃。")
         elif _generation_state["success"]:
             file_path = _generation_state["result"]
             seg = s.motion_segments[self._target_segment_idx]
             seg.last_bvh_path = file_path
             seg.generated = True
-            s.generation_progress = "Done ✓"
+            s.generation_progress = "完成 ✓"
             _push_history(s, seg.prompt, self._resolved_seed, self._segment_duration, file_path)
 
             if os.path.splitext(file_path)[1].lower() == ".bvh":
@@ -1107,12 +1106,12 @@ class KIMODO_OT_GenerateSegment(Operator):
                     start_frame=seg.start_frame,
                     label=seg.prompt[:30],
                 )
-                self.report({'INFO'}, f"Segment '{seg.prompt[:40]}' generated ✓")
+                self.report({'INFO'}, f"片段“{seg.prompt[:40]}”已生成 ✓")
             else:
-                self.report({'INFO'}, f"NPZ saved to {file_path}")
+                self.report({'INFO'}, f"NPZ 已保存到 {file_path}")
         else:
-            s.generation_progress = "Failed ✗"
-            self.report({'ERROR'}, f"Generation failed: {_generation_state['result']}")
+            s.generation_progress = "失败 ✗"
+            self.report({'ERROR'}, f"生成失败：{_generation_state['result']}")
 
         _tag_timeline_redraw(context)
         return {'FINISHED'}
@@ -1170,7 +1169,7 @@ def _build_multi_prompt_constraints(context, first_start_frame: int) -> "tuple[s
 class KIMODO_OT_GenerateAllSegments(Operator):
     """Generate all enabled segments as a single multi-prompt sequence with smooth transitions"""
     bl_idname = "kimodo.generate_all_segments"
-    bl_label  = "Generate All Segments"
+    bl_label  = "生成全部片段"
 
     _timer           = None
     _thread          = None
@@ -1181,10 +1180,10 @@ class KIMODO_OT_GenerateAllSegments(Operator):
     def invoke(self, context, event):
         s = context.scene.kimodo
         if not sc.is_running():
-            self.report({'WARNING'}, "Kimodo is not running — click 'Start Kimodo' first.")
+            self.report({'WARNING'}, "Kimodo 尚未运行，请先点击“启动 Kimodo”。")
             return {'CANCELLED'}
         if s.is_generating:
-            self.report({'WARNING'}, "Already generating.")
+            self.report({'WARNING'}, "正在生成。")
             return {'CANCELLED'}
 
         # Collect enabled segments sorted chronologically
@@ -1193,14 +1192,14 @@ class KIMODO_OT_GenerateAllSegments(Operator):
             key=lambda x: x[1].start_frame,
         )
         if not ordered:
-            self.report({'WARNING'}, "No enabled segments.")
+            self.report({'WARNING'}, "没有启用的片段。")
             return {'CANCELLED'}
 
         # Auto-fix any gaps or overlaps between segments
         ordered_segs = [seg for _, seg in ordered]
         if _enforce_segment_continuity(ordered_segs):
             self.report({'INFO'},
-                "Segment frame ranges adjusted to be contiguous (no gaps/overlaps).")
+                "已调整片段帧范围，使其连续（无间隙/重叠）。")
 
         self._segment_indices = [i for i, _ in ordered]
         self._start_frame = ordered[0][1].start_frame
@@ -1218,14 +1217,14 @@ class KIMODO_OT_GenerateAllSegments(Operator):
         constraints_json, con_err = _build_multi_prompt_constraints(context, self._start_frame)
         if con_err:
             self.report({'WARNING'},
-                        f"Constraint build failed (generating without): {con_err}")
+                        f"约束构建失败，将不带约束生成：{con_err}")
 
         s.is_generating = True
         s.generating_segment_index = self._segment_indices[0]
         _reset_state()
         _generation_state["running"] = True
         s.generation_progress = (
-            f"Generating {len(ordered)} segments as multi-prompt sequence…"
+            f"正在将 {len(ordered)} 个片段生成为多提示词序列…"
         )
 
         num_transition_frames = s.num_transition_frames
@@ -1283,8 +1282,8 @@ class KIMODO_OT_GenerateAllSegments(Operator):
         s.generating_segment_index = -1
 
         if _generation_state["cancelled"]:
-            s.generation_progress = "Cancelled"
-            self.report({'INFO'}, "Generation cancelled — result discarded.")
+            s.generation_progress = "已取消"
+            self.report({'INFO'}, "生成已取消，结果已丢弃。")
         elif _generation_state["success"]:
             file_path = _generation_state["result"]
 
@@ -1309,11 +1308,11 @@ class KIMODO_OT_GenerateAllSegments(Operator):
                 )
 
             n = len(self._segment_indices)
-            s.generation_progress = f"All {n} segments generated ✓"
-            self.report({'INFO'}, f"Multi-prompt generation complete ({n} segments) ✓")
+            s.generation_progress = f"全部 {n} 个片段已生成 ✓"
+            self.report({'INFO'}, f"多提示词生成完成（{n} 个片段）✓")
         else:
-            s.generation_progress = "Failed ✗"
-            self.report({'ERROR'}, f"Generation failed: {_generation_state['result']}")
+            s.generation_progress = "失败 ✗"
+            self.report({'ERROR'}, f"生成失败：{_generation_state['result']}")
 
         _tag_timeline_redraw(context)
         return {'FINISHED'}
@@ -1332,7 +1331,7 @@ class KIMODO_OT_GenerateAllSegments(Operator):
 class KIMODO_OT_ImportBVHAtFrame(Operator):
     """Import BVH and shift its keyframes to start at start_frame"""
     bl_idname = "kimodo.import_bvh_at_frame"
-    bl_label  = "Import BVH at Frame"
+    bl_label  = "在指定帧导入 BVH"
 
     filepath:    StringProperty(subtype='FILE_PATH')
     start_frame: IntProperty(default=1)
@@ -1340,7 +1339,7 @@ class KIMODO_OT_ImportBVHAtFrame(Operator):
 
     def execute(self, context):
         if not os.path.exists(self.filepath):
-            self.report({'ERROR'}, f"File not found: {self.filepath}")
+            self.report({'ERROR'}, f"找不到文件：{self.filepath}")
             return {'CANCELLED'}
 
         before = set(bpy.data.objects)
@@ -1472,7 +1471,7 @@ def _sample_curve_arc_length(curve_obj, n_samples, depsgraph):
 class KIMODO_OT_DrawFreehandCurve(Operator):
     """Create a new curve and activate Blender's Draw tool to sketch a path freehand"""
     bl_idname  = "kimodo.draw_freehand_curve"
-    bl_label   = "Draw Curve"
+    bl_label   = "绘制曲线"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1506,9 +1505,9 @@ class KIMODO_OT_DrawFreehandCurve(Operator):
         # Set tool to built-in Draw tool
         try:
             bpy.ops.wm.tool_set_by_id(name="builtin.draw")
-            self.report({'INFO'}, "Draw tool active! Sketch a path in the 3D Viewport, then click 'Sample Curve' when done.")
+            self.report({'INFO'}, "绘制工具已激活！请在 3D 视图中绘制路径，完成后点击“采样曲线”。")
         except Exception as e:
-            self.report({'WARNING'}, f"Created curve, but could not set active tool: {e}")
+            self.report({'WARNING'}, f"已创建曲线，但无法切换到绘制工具：{e}")
 
         return {'FINISHED'}
 
@@ -1516,7 +1515,7 @@ class KIMODO_OT_DrawFreehandCurve(Operator):
 class KIMODO_OT_SampleCurveAsWaypoints(Operator):
     """Sample a curve into evenly-spaced Root XZ waypoint constraints"""
     bl_idname  = "kimodo.sample_curve_as_waypoints"
-    bl_label   = "Sample Curve as Waypoints"
+    bl_label   = "采样曲线为路径点"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
@@ -1529,10 +1528,10 @@ class KIMODO_OT_SampleCurveAsWaypoints(Operator):
                 pass
 
         if not s.path_curve:
-            self.report({'ERROR'}, "Set a curve object in the Path Curve field.")
+            self.report({'ERROR'}, "请在“路径曲线”字段中设置一个曲线对象。")
             return {'CANCELLED'}
         if s.path_start_frame >= s.path_end_frame:
-            self.report({'ERROR'}, "Start Frame must be less than End Frame.")
+            self.report({'ERROR'}, "起始帧必须小于结束帧。")
             return {'CANCELLED'}
 
         n = s.path_waypoints
@@ -1540,7 +1539,7 @@ class KIMODO_OT_SampleCurveAsWaypoints(Operator):
         positions = _sample_curve_arc_length(s.path_curve, n, depsgraph)
 
         if not positions:
-            self.report({'ERROR'}, "Could not sample any points from the curve.")
+            self.report({'ERROR'}, "无法从曲线中采样任何点。")
             return {'CANCELLED'}
 
         # Heading per sample: the forward direction of the curve on the
@@ -1605,14 +1604,14 @@ class KIMODO_OT_SampleCurveAsWaypoints(Operator):
         if saved_active:
             context.view_layer.objects.active = saved_active
 
-        self.report({'INFO'}, f"Added {n} path waypoints (frames {start_f}–{end_f})")
+        self.report({'INFO'}, f"已添加 {n} 个路径点（帧 {start_f}–{end_f}）。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_AddConstraint(Operator):
     """Add a Kimodo motion constraint marker at the 3D cursor"""
     bl_idname = "kimodo.add_constraint"
-    bl_label = "Add Constraint Marker"
+    bl_label = "添加约束标记"
 
     constraint_type: bpy.props.StringProperty(default='root2d')
 
@@ -1643,7 +1642,7 @@ class KIMODO_OT_AddConstraint(Operator):
         item.label = marker_obj.name
         s.constraint_index = len(s.motion_constraints) - 1
 
-        self.report({'INFO'}, f"Added {ctype} constraint at frame {cur_frame} → '{marker_obj.name}'")
+        self.report({'INFO'}, f"已在第 {cur_frame} 帧添加 {ctype} 约束 → “{marker_obj.name}”。")
         return {'FINISHED'}
 
     # ------------------------------------------------------------------
@@ -1663,8 +1662,8 @@ class KIMODO_OT_AddConstraint(Operator):
         # Case 1: an armature is selected and active is an armature → use active as-is
         if has_selected_armature and active and active.type == 'ARMATURE':
             self.report({'INFO'},
-                f"Using selected armature '{active.name}' as full-body pose reference. "
-                f"Pose it at frame {cur_frame} to define the keyframe.")
+                f"使用选中的骨架“{active.name}”作为全身姿态参考。"
+                f"请在第 {cur_frame} 帧摆出姿态来定义关键帧。")
             return active
 
         # Case 2: no armature selected at all → duplicate source_armature for posing
@@ -1673,9 +1672,8 @@ class KIMODO_OT_AddConstraint(Operator):
 
         # Case 3: nothing to work with
         self.report({'ERROR'},
-            "Full-Body constraint needs an armature. "
-            "Either: (a) select an armature first, or "
-            "(b) generate a motion first so a source armature exists to duplicate.")
+            "全身约束需要骨架。"
+            "请先选择一个骨架，或先生成一次动作以便复制源骨架。")
         return None
         
     def _duplicate_source_for_posing(self, context, s, cur_frame):
@@ -1753,8 +1751,8 @@ class KIMODO_OT_AddConstraint(Operator):
         context.view_layer.update()
 
         self.report({'INFO'},
-            f"Duplicated source armature as '{name}', frozen at frame {cur_frame}. "
-            f"Enter Pose Mode and tweak — changes will stick (no F-curves to fight).")
+            f"已将源骨架复制为“{name}”，并冻结在第 {cur_frame} 帧。"
+            f"进入姿态模式后可调整，修改会保留（不会被 F 曲线覆盖）。")
         return dup
 
     def _create_empty(self, context, ctype, cur_frame):
@@ -1793,7 +1791,7 @@ class KIMODO_OT_AddConstraint(Operator):
 class KIMODO_OT_LinkExistingAsConstraint(Operator):
     """Link the currently selected object as a Kimodo constraint marker"""
     bl_idname = "kimodo.link_as_constraint"
-    bl_label = "Link Selected as Constraint"
+    bl_label = "将所选对象链接为约束"
 
     constraint_type: bpy.props.StringProperty(default='root2d')
 
@@ -1801,7 +1799,7 @@ class KIMODO_OT_LinkExistingAsConstraint(Operator):
         s = context.scene.kimodo
         obj = context.active_object
         if not obj:
-            self.report({'ERROR'}, "Select an object first.")
+            self.report({'ERROR'}, "请先选择一个对象。")
             return {'CANCELLED'}
 
         ctype = self.constraint_type
@@ -1813,23 +1811,23 @@ class KIMODO_OT_LinkExistingAsConstraint(Operator):
         item.label = obj.name
         s.constraint_index = len(s.motion_constraints) - 1
 
-        self.report({'INFO'}, f"Linked '{obj.name}' as {ctype} constraint at frame {item.frame}")
+        self.report({'INFO'}, f"已将“{obj.name}”链接为第 {item.frame} 帧的 {ctype} 约束。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_RemoveConstraint(Operator):
     """Remove the selected constraint from the list (optionally delete the marker)"""
     bl_idname = "kimodo.remove_constraint"
-    bl_label = "Remove Constraint"
+    bl_label = "移除约束"
 
     index: IntProperty(
-        name="Index",
-        description="Index of the constraint to remove (-1 = active)",
+        name="索引",
+        description="要移除的约束索引（-1 = 当前项）",
         default=-1,
     )
     delete_object: BoolProperty(
-        name="Delete Marker Object",
-        description="Also delete the Empty/object from the scene",
+        name="删除标记对象",
+        description="同时从场景中删除空物体/对象",
         default=False,
     )
 
@@ -1851,7 +1849,7 @@ class KIMODO_OT_RemoveConstraint(Operator):
 class KIMODO_OT_GotoConstraintFrame(Operator):
     """Jump the timeline to this constraint's frame"""
     bl_idname = "kimodo.goto_constraint_frame"
-    bl_label = "Go to Frame"
+    bl_label = "跳转到帧"
 
     frame: bpy.props.IntProperty()
 
@@ -1863,7 +1861,7 @@ class KIMODO_OT_GotoConstraintFrame(Operator):
 class KIMODO_OT_SelectConstraintObject(Operator):
     """Select and focus the constraint's marker object in the viewport"""
     bl_idname = "kimodo.select_constraint_object"
-    bl_label = "Select Marker"
+    bl_label = "选择标记"
 
     index: bpy.props.IntProperty()
 
@@ -1873,7 +1871,7 @@ class KIMODO_OT_SelectConstraintObject(Operator):
             return {'CANCELLED'}
         obj = s.motion_constraints[self.index].marker_object
         if not obj:
-            self.report({'WARNING'}, "No object linked to this constraint.")
+            self.report({'WARNING'}, "此约束没有链接对象。")
             return {'CANCELLED'}
         bpy.ops.object.select_all(action='DESELECT')
         obj.select_set(True)
@@ -1892,7 +1890,7 @@ class KIMODO_OT_SelectConstraintObject(Operator):
 class KIMODO_OT_PreviewConstraintsJSON(Operator):
     """Build and show the constraints JSON in a Blender Text Editor block"""
     bl_idname = "kimodo.preview_constraints_json"
-    bl_label = "Preview Constraints JSON"
+    bl_label = "预览约束 JSON"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -1904,7 +1902,7 @@ class KIMODO_OT_PreviewConstraintsJSON(Operator):
                 auto_canonicalize=s.auto_canonicalize,
             )
         except Exception as e:
-            self.report({'ERROR'}, f"Failed to build JSON: {e}")
+            self.report({'ERROR'}, f"构建 JSON 失败：{e}")
             return {'CANCELLED'}
 
         s.constraint_json_preview = json_str
@@ -1916,14 +1914,14 @@ class KIMODO_OT_PreviewConstraintsJSON(Operator):
         text_block = bpy.data.texts.new(block_name)
         text_block.write(json_str)
 
-        self.report({'INFO'}, f"Constraints JSON written to Text Editor: '{block_name}'")
+        self.report({'INFO'}, f"约束 JSON 已写入文本编辑器：“{block_name}”。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_ClearConstraints(Operator):
     """Remove all Kimodo constraints from the list"""
     bl_idname = "kimodo.clear_constraints"
-    bl_label = "Clear All Constraints"
+    bl_label = "清空全部约束"
     bl_options = {'REGISTER', 'UNDO'}
 
     def invoke(self, context, event):
@@ -1931,20 +1929,20 @@ class KIMODO_OT_ClearConstraints(Operator):
 
     def execute(self, context):
         context.scene.kimodo.motion_constraints.clear()
-        self.report({'INFO'}, "All constraints cleared.")
+        self.report({'INFO'}, "已清空全部约束。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_SetTo30FPS(Operator):
     """Set the scene frame rate to 30 FPS for Kimodo compatibility"""
     bl_idname = "kimodo.set_to_30fps"
-    bl_label = "Set Scene to 30 FPS"
+    bl_label = "将场景设为 30 FPS"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
         context.scene.render.fps = 30
         context.scene.render.fps_base = 1.0
-        self.report({'INFO'}, "Scene FPS set to 30.")
+        self.report({'INFO'}, "场景 FPS 已设为 30。")
         return {'FINISHED'}
 
 
@@ -1955,7 +1953,7 @@ class KIMODO_OT_SetTo30FPS(Operator):
 class KIMODO_OT_PickLatestKimodoArmature(Operator):
     """Auto-select the most recently generated Kimodo armature as the reuse target"""
     bl_idname = "kimodo.pick_latest_armature"
-    bl_label  = "Pick Latest Generated Armature"
+    bl_label  = "选择最近生成的骨架"
 
     def execute(self, context):
         s = context.scene.kimodo
@@ -1964,12 +1962,12 @@ class KIMODO_OT_PickLatestKimodoArmature(Operator):
             if obj.type == 'ARMATURE' and obj.get("kimodo_source")
         ]
         if not candidates:
-            self.report({'WARNING'}, "No Kimodo-generated armatures found in scene")
+            self.report({'WARNING'}, "场景中没有找到 Kimodo 生成的骨架。")
             return {'CANCELLED'}
 
         latest = max(candidates, key=lambda obj: obj.get("kimodo_creation_time", 0.0))
         s.reuse_armature = latest
-        self.report({'INFO'}, f"Reuse target set to '{latest.name}'")
+        self.report({'INFO'}, f"复用目标已设为“{latest.name}”。")
         return {'FINISHED'}
 
 
@@ -1980,7 +1978,7 @@ class KIMODO_OT_PickLatestKimodoArmature(Operator):
 class KIMODO_OT_ReimportFromHistory(Operator):
     """Re-import the BVH file from a history entry"""
     bl_idname = "kimodo.reimport_from_history"
-    bl_label  = "Re-import BVH"
+    bl_label  = "重新导入 BVH"
     bl_options = {'REGISTER', 'UNDO'}
 
     index: IntProperty(default=0)
@@ -1988,21 +1986,21 @@ class KIMODO_OT_ReimportFromHistory(Operator):
     def execute(self, context):
         s = context.scene.kimodo
         if not (0 <= self.index < len(s.generation_history)):
-            self.report({'ERROR'}, "Invalid history index.")
+            self.report({'ERROR'}, "无效的历史记录索引。")
             return {'CANCELLED'}
         entry = s.generation_history[self.index]
         if not os.path.isfile(entry.bvh_path):
-            self.report({'ERROR'}, f"BVH file no longer exists: {entry.bvh_path}")
+            self.report({'ERROR'}, f"BVH 文件已不存在：{entry.bvh_path}")
             return {'CANCELLED'}
         bpy.ops.kimodo.import_bvh('EXEC_DEFAULT', filepath=entry.bvh_path)
-        self.report({'INFO'}, f"Re-imported '{os.path.basename(entry.bvh_path)}'")
+        self.report({'INFO'}, f"已重新导入“{os.path.basename(entry.bvh_path)}”。")
         return {'FINISHED'}
 
 
 class KIMODO_OT_ClearHistory(Operator):
     """Clear all generation history entries"""
     bl_idname = "kimodo.clear_history"
-    bl_label  = "Clear History"
+    bl_label  = "清空历史"
     bl_options = {'REGISTER', 'UNDO'}
 
     def invoke(self, context, event):
@@ -2010,7 +2008,7 @@ class KIMODO_OT_ClearHistory(Operator):
 
     def execute(self, context):
         context.scene.kimodo.generation_history.clear()
-        self.report({'INFO'}, "Generation history cleared.")
+        self.report({'INFO'}, "生成历史已清空。")
         return {'FINISHED'}
 
 
@@ -2021,7 +2019,7 @@ class KIMODO_OT_ClearHistory(Operator):
 class KIMODO_OT_GenerateVariations(Operator):
     """Generate N variations of the current prompt with different random seeds"""
     bl_idname = "kimodo.generate_variations"
-    bl_label  = "Generate Variations"
+    bl_label  = "生成变体"
 
     _timer       = None
     _thread      = None
@@ -2033,10 +2031,10 @@ class KIMODO_OT_GenerateVariations(Operator):
         s = context.scene.kimodo
 
         if not sc.is_running():
-            self.report({'WARNING'}, "Kimodo is not running — click 'Start Kimodo' first.")
+            self.report({'WARNING'}, "Kimodo 尚未运行，请先点击“启动 Kimodo”。")
             return {'CANCELLED'}
         if s.is_generating:
-            self.report({'WARNING'}, "Already generating — please wait.")
+            self.report({'WARNING'}, "正在生成，请稍候。")
             return {'CANCELLED'}
 
         self._total       = s.num_variations
@@ -2056,7 +2054,7 @@ class KIMODO_OT_GenerateVariations(Operator):
     def _start_next(self, context, s):
         var_num = self._current_idx + 1
         seed    = self._seeds[self._current_idx]
-        s.generation_progress = f"Variation {var_num}/{self._total}…"
+        s.generation_progress = f"变体 {var_num}/{self._total}…"
 
         _reset_state()
         _generation_state["running"] = True
@@ -2094,7 +2092,7 @@ class KIMODO_OT_GenerateVariations(Operator):
 
         var_num = self._current_idx + 1
         s.generation_progress = (
-            f"Variation {var_num}/{self._total}: "
+            f"变体 {var_num}/{self._total}："
             + _generation_state.get("progress", "")
         )
         for area in context.screen.areas:
@@ -2111,16 +2109,16 @@ class KIMODO_OT_GenerateVariations(Operator):
         if _generation_state["cancelled"]:
             context.window_manager.event_timer_remove(self._timer)
             s.is_generating = False
-            s.generation_progress = "Cancelled"
+            s.generation_progress = "已取消"
             self.report({'INFO'},
-                        f"Variations cancelled after {self._current_idx} of {self._total}.")
+                        f"变体生成已取消，已完成 {self._current_idx}/{self._total}。")
             return {'FINISHED'}
 
         if not _generation_state["success"]:
             context.window_manager.event_timer_remove(self._timer)
             s.is_generating = False
-            s.generation_progress = f"Variation {var_num} failed ✗"
-            self.report({'ERROR'}, f"Variation {var_num} failed: {_generation_state['result']}")
+            s.generation_progress = f"变体 {var_num} 失败 ✗"
+            self.report({'ERROR'}, f"变体 {var_num} 失败：{_generation_state['result']}")
             return {'FINISHED'}
 
         file_path = _generation_state["result"]
@@ -2144,7 +2142,7 @@ class KIMODO_OT_GenerateVariations(Operator):
             except RuntimeError as e:
                 context.window_manager.event_timer_remove(self._timer)
                 s.is_generating = False
-                s.generation_progress = f"Variation {var_num} failed ✗"
+                s.generation_progress = f"变体 {var_num} 失败 ✗"
                 self.report({'ERROR'}, str(e))
                 return {'FINISHED'}
             after   = set(bpy.data.objects)
@@ -2164,14 +2162,14 @@ class KIMODO_OT_GenerateVariations(Operator):
         # All done
         context.window_manager.event_timer_remove(self._timer)
         s.is_generating = False
-        s.generation_progress = f"All {self._total} variations done ✓"
-        self.report({'INFO'}, f"Generated {self._total} variations ✓")
+        s.generation_progress = f"全部 {self._total} 个变体已完成 ✓"
+        self.report({'INFO'}, f"已生成 {self._total} 个变体 ✓")
         return {'FINISHED'}
 
     def cancel(self, context):
         context.window_manager.event_timer_remove(self._timer)
         context.scene.kimodo.is_generating = False
-        context.scene.kimodo.generation_progress = "Cancelled"
+        context.scene.kimodo.generation_progress = "已取消"
         _generation_state["running"] = False
 
 

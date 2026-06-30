@@ -1,10 +1,8 @@
 """
-Kimodo auto-installer
+Kimodo 自动安装器。
 
-Creates a managed Python venv at ~/.kimodo-venv/, installs Kimodo from the
-Aero-Ex fork (offline-capable), downloads the LLM2Vec text-encoder model
-locally, patches llm2vec_wrapper.py to load it from disk, and sets the
-addon's Python path automatically.
+创建受管理的 Python 虚拟环境，安装 Kimodo 及依赖，下载 LLM2Vec 文本编码器，
+修补离线路径，并自动写入插件使用的 Python 路径。
 """
 
 import os
@@ -150,11 +148,11 @@ def install_status() -> str:
     """Return a one-line summary for the UI."""
     with _lock:
         if _state["error"]:
-            return f"Error: {_state['error']}"
+            return f"错误：{_state['error']}"
         if _state["done"]:
-            return "Installed successfully"
+            return "安装成功"
         if _state["running"]:
-            return _state["lines"][-1] if _state["lines"] else "Installing…"
+            return _state["lines"][-1] if _state["lines"] else "正在安装…"
         return ""
 
 
@@ -394,7 +392,7 @@ def _run(cmd: list, step: str, env: "dict | None" = None,
                 on_line(stripped)
     proc.wait()
     if proc.returncode != 0:
-        raise RuntimeError(f"{step} failed (exit {proc.returncode})")
+        raise RuntimeError(f"{step} 失败（退出码 {proc.returncode}）")
 
 
 def _download_with_retry(
@@ -449,13 +447,13 @@ def _download_with_retry(
     for attempt in range(1, _HF_MAX_ATTEMPTS + 1):
         if attempt > 1:
             wait = _HF_BACKOFF_BASE * (2 ** (attempt - 2))   # 15 s, 30 s
-            _log(f"  Retry {attempt}/{_HF_MAX_ATTEMPTS} in {wait}s…")
+            _log(f"  将在 {wait}s 后进行第 {attempt}/{_HF_MAX_ATTEMPTS} 次重试…")
             _time.sleep(wait)
         _set_dl_progress(0.0, step)
         try:
             _run(
                 [venv_py, "-c", dl_script],
-                f"{step} (attempt {attempt}/{_HF_MAX_ATTEMPTS})",
+                f"{step}（第 {attempt}/{_HF_MAX_ATTEMPTS} 次）",
                 env=extra_env,
                 on_line=_on_line,
             )
@@ -463,18 +461,18 @@ def _download_with_retry(
             return
         except RuntimeError as exc:
             last_exc = exc
-            _log(f"  Attempt {attempt} failed: {exc}")
+            _log(f"  第 {attempt} 次尝试失败：{exc}")
 
     raise RuntimeError(
-        f"{step} failed after {_HF_MAX_ATTEMPTS} attempts. "
-        f"Last error: {last_exc}"
+        f"{step} 在 {_HF_MAX_ATTEMPTS} 次尝试后仍失败。"
+        f"最后错误：{last_exc}"
     )
 
 
 def _venv_pip() -> list:
     py = managed_python()
     if not py:
-        raise RuntimeError(f"Venv Python not found in {managed_venv()}")
+        raise RuntimeError(f"在 {managed_venv()} 中找不到虚拟环境 Python")
     return [py, "-m", "pip"]
 
 
@@ -512,7 +510,7 @@ def _patch_wrapper(wrapper_path: str, local_dir: str) -> None:
         text = f.read()
 
     if _WRAPPER_PLACEHOLDER not in text:
-        _log("Warning: placeholder not found in llm2vec_wrapper.py — already patched?")
+        _log("警告：llm2vec_wrapper.py 中没有找到占位符，可能已经修补过。")
         return
 
     # Use a raw string so Windows backslashes survive the replacement.
@@ -616,37 +614,36 @@ def _do_install(hf_token: str = "", system_python: str = "",
         sys_py = ""
         if system_python:
             if os.path.isfile(system_python) and _validate_python(system_python):
-                _log(f"Using user-specified Python: {system_python}")
+                _log(f"使用用户指定的 Python：{system_python}")
                 sys_py = system_python
             else:
-                _log(f"User-specified Python is not a valid 3.10–3.12 executable: "
+                _log(f"用户指定的 Python 不是有效的 3.10–3.12 可执行文件："
                      f"{system_python}")
-                _log("Falling back to auto-detection…")
+                _log("改用自动检测…")
         if not sys_py:
-            _log("Searching for system Python 3.10+…")
+            _log("正在查找系统 Python 3.10+…")
             sys_py = _find_system_python()
         if not sys_py:
             with _lock:
                 _state["needs_python"] = True
             raise RuntimeError(
-                "No Python 3.10+ found. "
-                "Install it from python.org (tick 'Add Python to PATH'), "
-                "then click Retry Install."
+                "没有找到 Python 3.10+。请从 python.org 安装，"
+                "勾选“Add Python to PATH”，然后点击“重试安装”。"
             )
-        _log(f"Found: {sys_py}")
+        _log(f"已找到：{sys_py}")
 
         # 2 — Create venv
-        _log(f"Install location: {venv}")
+        _log(f"安装位置：{venv}")
         os.makedirs(os.path.dirname(venv) or ".", exist_ok=True)
-        _run([sys_py, "-m", "venv", venv], "Creating venv")
+        _run([sys_py, "-m", "venv", venv], "创建虚拟环境")
 
         venv_py = _venv_python(venv)
         if not venv_py:
-            raise RuntimeError("Venv was created but Python binary not found.")
+            raise RuntimeError("虚拟环境已创建，但没有找到 Python 可执行文件。")
         pip = [venv_py, "-m", "pip"]
 
         # 3 — Upgrade pip
-        _run([*pip, "install", "--upgrade", "pip"], "Upgrading pip")
+        _run([*pip, "install", "--upgrade", "pip"], "升级 pip")
 
         # 4 — Install PyTorch.
         #     Index selection depends on Python version and GPU compute capability:
@@ -663,7 +660,7 @@ def _do_install(hf_token: str = "", system_python: str = "",
         )
         py_minor = int(r.stdout.strip() or "0")
         gpu_cap = _max_gpu_compute_capability()
-        _log(f"Detected GPU compute capability: {gpu_cap[0]}.{gpu_cap[1]}")
+        _log(f"检测到 GPU 计算能力：{gpu_cap[0]}.{gpu_cap[1]}")
 
         if gpu_cap >= (12, 0):
             # Blackwell (RTX 50xx / sm_120+): only PyTorch 2.7+ / cu128 has kernels
@@ -676,11 +673,11 @@ def _do_install(hf_token: str = "", system_python: str = "",
         else:
             torch_index = "https://download.pytorch.org/whl/cu121"
             cuda_label = "12.1"
-        _log(f"Installing PyTorch with CUDA {cuda_label} support — this may take several minutes…")
+        _log(f"正在安装支持 CUDA {cuda_label} 的 PyTorch，可能需要几分钟…")
         _run(
             [*pip, "install", "torch",
              "--index-url", torch_index],
-            "Installing PyTorch",
+            "安装 PyTorch",
         )
 
         # 5 — Install the pre-built motion_correction wheel from Aero-Ex.
@@ -688,7 +685,7 @@ def _do_install(hf_token: str = "", system_python: str = "",
         #     Building it from source requires MSVC on Windows (not just cmake),
         #     so the Aero-Ex fork ships pre-built wheels for each Python version.
         #     We install the wheel first; then tell setup.py to skip rebuilding it.
-        _log("Installing pre-built motion_correction wheel…")
+        _log("正在安装预编译的 motion_correction wheel…")
         r = subprocess.run(
             [venv_py, "-c",
              "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')"],
@@ -709,11 +706,11 @@ def _do_install(hf_token: str = "", system_python: str = "",
                 "https://github.com/Aero-Ex/kimodo/releases/download/v1.0.0/"
                 f"motion_correction-1.0.0-{py_tag}-{py_tag}-{platform_tag}.whl"
             )
-            _log(f"Wheel: {wheel_url}")
-            _run([*pip, "install", wheel_url], "Installing motion_correction")
+            _log(f"wheel 地址：{wheel_url}")
+            _run([*pip, "install", wheel_url], "安装 motion_correction")
         else:
-            _log("macOS: no pre-built wheel — motion_correction will build from source "
-                 "(requires Xcode Command Line Tools)")
+            _log("macOS 没有预编译 wheel，motion_correction 将从源码构建"
+                 "（需要 Xcode Command Line Tools）")
 
         # 6 — Install packages that Kimodo imports but does not declare in
         #     pyproject.toml (discovered by auditing every import in the source):
@@ -725,25 +722,25 @@ def _do_install(hf_token: str = "", system_python: str = "",
         #   PyGLM / SpatialTransform are also imported in bvh.py but both
         #   arrive transitively via bvhio (pyglm, spatial-transform) so they
         #   do not need to be listed here.
-        _log("Installing undeclared Kimodo dependencies…")
+        _log("正在安装 Kimodo 未声明但实际需要的依赖…")
         _run(
             [*pip, "install",
              "bitsandbytes>=0.46.1",
              "safetensors",
              "psutil"],
-            "Installing undeclared dependencies",
+            "安装 Kimodo 补充依赖",
         )
 
         # 7 — Install Kimodo from Aero-Ex fork.
         #     SKIP_MOTION_CORRECTION_IN_SETUP=1 tells setup.py not to rebuild
         #     motion_correction (we already installed it in step 5).
         kimodo_url = _github_install_url("Aero-Ex", "kimodo")
-        _log(f"Installing Kimodo (Aero-Ex offline fork) via {kimodo_url}…")
+        _log(f"正在从 Aero-Ex 离线分支安装 Kimodo：{kimodo_url}…")
         kimodo_env = os.environ.copy()
         kimodo_env["SKIP_MOTION_CORRECTION_IN_SETUP"] = "1"
         _run(
             [*pip, "install", kimodo_url],
-            "Installing Kimodo",
+            "安装 Kimodo",
             env=kimodo_env,
         )
 
@@ -753,39 +750,39 @@ def _do_install(hf_token: str = "", system_python: str = "",
         #     Kimodo lists this under [project.optional-dependencies] demo = [...],
         #     so it is not pulled in by a plain pip install.
         viser_url = _github_install_url("nv-tlabs", "kimodo-viser")
-        _log(f"Installing kimodo-viser fork via {viser_url}…")
+        _log(f"正在安装 kimodo-viser 分支：{viser_url}…")
         _run(
             [*pip, "install", viser_url],
-            "Installing kimodo-viser",
+            "安装 kimodo-viser",
         )
 
         # 9 — Locate llm2vec_wrapper.py
-        _log("Locating LLM2Vec wrapper in installed package…")
+        _log("正在定位已安装包中的 LLM2Vec wrapper…")
         wrapper = _find_wrapper(venv_py)
         if not wrapper:
             raise RuntimeError(
-                "llm2vec_wrapper.py not found after installation. "
-                "Kimodo may not have installed correctly — check the log above."
+                "安装后没有找到 llm2vec_wrapper.py。"
+                "Kimodo 可能没有正确安装，请检查上方日志。"
             )
-        _log(f"Found wrapper: {wrapper}")
+        _log(f"已找到 wrapper：{wrapper}")
 
         # 10 — Download the LLM2Vec text-encoder model to a local folder.
         #     The Aero-Ex fork hosts the model at Aero-Ex/KIMODO-Meta3_llm2vec_NF4
         #     on HuggingFace.  We download it once and point the wrapper at it.
-        _log(f"Downloading LLM2Vec model ({LLMVEC_MODEL_ID}) — this may take a while…")
+        _log(f"正在下载 LLM2Vec 模型（{LLMVEC_MODEL_ID}），这可能需要一段时间…")
         os.makedirs(llmvec, exist_ok=True)
         _download_with_retry(
             venv_py,
-            "Downloading LLM2Vec model",
+            "下载 LLM2Vec 模型",
             repo_id=LLMVEC_MODEL_ID,
             local_dir=llmvec,
             hf_token=hf_token,
         )
 
         # 11 — Patch wrapper for fully offline operation
-        _log("Patching llm2vec_wrapper.py for offline use…")
+        _log("正在修补 llm2vec_wrapper.py 以支持离线使用…")
         _patch_wrapper(wrapper, llmvec)
-        _log("Patch applied.")
+        _log("修补完成。")
 
         # 12 — Download Kimodo model weights into the HF cache.
         #      load_model.py calls snapshot_download unconditionally ("will check
@@ -793,10 +790,10 @@ def _do_install(hf_token: str = "", system_python: str = "",
         #      before we enable HF_HUB_OFFLINE at bridge launch time.
         #      We only download the default SOMA model; the other two are
         #      unsupported in the addon UI and can be fetched later if needed.
-        _log("Downloading Kimodo-SOMA-RP-v1 model weights — this may take a while…")
+        _log("正在下载 Kimodo-SOMA-RP-v1 模型权重，这可能需要一段时间…")
         _download_with_retry(
             venv_py,
-            "Downloading Kimodo-SOMA-RP-v1 weights",
+            "下载 Kimodo-SOMA-RP-v1 权重",
             repo_id="nvidia/Kimodo-SOMA-RP-v1",
             hf_token=hf_token,
         )
@@ -822,11 +819,11 @@ def _do_install(hf_token: str = "", system_python: str = "",
 
         with _lock:
             _state["done"] = True
-        _log("Installation complete!  You can now click 'Start Kimodo'.")
+        _log("安装完成！现在可以点击“启动 Kimodo”。")
 
     except Exception as exc:
         tb = traceback.format_exc()
-        print(f"[Kimodo Install] FAILED:\n{tb}", flush=True)
+        print(f"[Kimodo Install] 失败：\n{tb}", flush=True)
         with _lock:
             _state["error"] = str(exc)
     finally:
@@ -840,12 +837,10 @@ def _do_install(hf_token: str = "", system_python: str = "",
 
 class KIMODO_OT_InstallKimodo(Operator):
     bl_idname      = "kimodo.install_kimodo"
-    bl_label       = "Install Kimodo (Auto)"
+    bl_label       = "自动安装 Kimodo"
     bl_description = (
-        "Choose a folder, then create a Kimodo virtual environment there, install "
-        "Kimodo from the Aero-Ex offline fork, download the LLM2Vec text encoder "
-        "locally, and configure the addon automatically. Requires internet access "
-        "and ~5–10 GB of disk space."
+        "选择一个文件夹，在其中创建 Kimodo 虚拟环境，安装 Aero-Ex 离线分支，"
+        "下载 LLM2Vec 文本编码器，并自动配置插件。需要网络和约 5–10 GB 磁盘空间。"
     )
 
     # Folder chosen in the file browser (populated by fileselect_add). The venv
@@ -868,7 +863,7 @@ class KIMODO_OT_InstallKimodo(Operator):
 
     def execute(self, context):
         if is_installing():
-            self.report({"WARNING"}, "Installation is already in progress.")
+            self.report({"WARNING"}, "安装正在进行中。")
             return {"CANCELLED"}
 
         # If the user picked a folder in the browser, place the venv in a clearly
@@ -892,15 +887,15 @@ class KIMODO_OT_InstallKimodo(Operator):
         # A complete install is guarded by the sentinel file; if that's absent
         # the venv is broken and safe to wipe regardless of session state.
         if venv_exists() and not is_installed():
-            _log(f"Removing partial venv for clean retry: {install_dir}")
+            _log(f"正在移除未完成的虚拟环境以便重新安装：{install_dir}")
             try:
                 shutil.rmtree(install_dir)
             except Exception as exc:
-                self.report({"ERROR"}, f"Could not remove partial venv: {exc}")
+                self.report({"ERROR"}, f"无法移除未完成的虚拟环境：{exc}")
                 return {"CANCELLED"}
 
         if is_installed():
-            self.report({"INFO"}, "Managed Kimodo venv already exists.")
+            self.report({"INFO"}, "受管理的 Kimodo 虚拟环境已存在。")
             return {"CANCELLED"}
 
         with _lock:
@@ -933,32 +928,31 @@ class KIMODO_OT_InstallKimodo(Operator):
             return 0.5 if is_installing() else None
 
         bpy.app.timers.register(_redraw, first_interval=0.5)
-        self.report({"INFO"}, "Kimodo installation started — watch the Connection panel.")
+        self.report({"INFO"}, "Kimodo 安装已开始，请查看“连接”面板。")
         return {"FINISHED"}
 
 
 class KIMODO_OT_UseInstalledKimodo(Operator):
     bl_idname      = "kimodo.use_installed_kimodo"
-    bl_label       = "Use Installed Kimodo"
-    bl_description = "Point the addon at the managed ~/.kimodo-venv Python"
+    bl_label       = "使用已安装的 Kimodo"
+    bl_description = "将插件指向受管理虚拟环境中的 Python"
 
     def execute(self, context):
         py = managed_python()
         if not py:
-            self.report({"ERROR"}, f"Managed venv not found at {managed_venv()}")
+            self.report({"ERROR"}, f"在 {managed_venv()} 中找不到受管理虚拟环境")
             return {"CANCELLED"}
         context.scene.kimodo.python_executable = py
-        self.report({"INFO"}, f"Python path set to: {py}")
+        self.report({"INFO"}, f"Python 路径已设置为：{py}")
         return {"FINISHED"}
 
 
 class KIMODO_OT_ResetVenv(Operator):
     bl_idname      = "kimodo.reset_venv"
-    bl_label       = "Delete Virtual Environment"
+    bl_label       = "删除虚拟环境"
     bl_description = (
-        "Delete ~/.kimodo-venv and allow a fresh install. "
-        "Use this when a previous install failed, is stuck, or you need to "
-        "reinstall for a different GPU or Python version."
+        "删除 Kimodo 虚拟环境并允许重新安装。"
+        "适用于上次安装失败、卡住，或需要为不同 GPU / Python 版本重新安装的情况。"
     )
 
     def invoke(self, context, event):
@@ -966,27 +960,27 @@ class KIMODO_OT_ResetVenv(Operator):
 
     def execute(self, context):
         if is_installing():
-            self.report({"WARNING"}, "Cannot reset while installation is in progress.")
+            self.report({"WARNING"}, "安装过程中不能重置。")
             return {"CANCELLED"}
         if not venv_exists():
-            self.report({"INFO"}, "No venv found — nothing to reset.")
+            self.report({"INFO"}, "没有找到虚拟环境，无需重置。")
             return {"CANCELLED"}
         install_dir = managed_venv()
         try:
             shutil.rmtree(install_dir)
         except Exception as exc:
-            self.report({"ERROR"}, f"Could not remove venv: {exc}")
+            self.report({"ERROR"}, f"无法移除虚拟环境：{exc}")
             return {"CANCELLED"}
         with _lock:
             _state.update(running=False, lines=[], error="", done=False)
-        self.report({"INFO"}, f"Removed {install_dir} — ready for a fresh install.")
+        self.report({"INFO"}, f"已删除 {install_dir}，可以重新安装。")
         return {"FINISHED"}
 
 
 class KIMODO_OT_OpenPythonDownload(Operator):
     bl_idname      = "kimodo.open_python_download"
-    bl_label       = "Download Python 3.12"
-    bl_description = "Open python.org/downloads in your browser"
+    bl_label       = "下载 Python 3.12"
+    bl_description = "在浏览器中打开 python.org/downloads"
 
     def execute(self, context):
         import platform, webbrowser

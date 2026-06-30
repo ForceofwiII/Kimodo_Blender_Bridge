@@ -34,7 +34,7 @@ import time
 _proc: "subprocess.Popen | None" = None
 _stdout_queue: "queue.Queue | None" = None
 _lock = threading.Lock()
-_status = "Not started"
+_status = "未启动"
 _ready  = False
 _busy   = False              # a request is in flight on the pipe
 _cancel_requested = False
@@ -54,7 +54,7 @@ def _bridge_path() -> str:
 def _send(obj: dict) -> None:
     proc = _proc
     if proc is None or proc.poll() is not None:
-        raise RuntimeError("Bridge is not running")
+        raise RuntimeError("桥接进程未运行")
     proc.stdin.write(json.dumps(obj) + "\n")
     proc.stdin.flush()
 
@@ -99,7 +99,7 @@ def start(python_exe: str, model_name: str, use_offload: bool = False, progress_
 
         bridge = _bridge_path()
         if not os.path.isfile(bridge):
-            return False, f"bridge_server.py not found at: {bridge}"
+            return False, f"未找到 bridge_server.py：{bridge}"
 
         python = _resolve_python(python_exe)
 
@@ -117,7 +117,7 @@ def start(python_exe: str, model_name: str, use_offload: bool = False, progress_
         _ready  = False
         _busy   = False
         _cancel_requested = False
-        _status = "Launching…"
+        _status = "正在启动…"
 
         try:
             cmd = [python, bridge, "--model", model_name]
@@ -137,10 +137,10 @@ def start(python_exe: str, model_name: str, use_offload: bool = False, progress_
             )
         except FileNotFoundError:
             _proc = None
-            return False, f"Python executable not found: {python}"
+            return False, f"找不到 Python 可执行文件：{python}"
         except Exception as exc:
             _proc = None
-            return False, f"Failed to launch bridge: {exc}"
+            return False, f"桥接进程启动失败：{exc}"
 
         _stdout_queue = queue.Queue()
 
@@ -168,7 +168,7 @@ def start(python_exe: str, model_name: str, use_offload: bool = False, progress_
             if _proc.poll() is not None:
                 # Give the stderr drain thread a moment to flush remaining lines
                 time.sleep(0.2)
-                _status = f"Process exited early (code {_proc.returncode}) — see console for details"
+                _status = f"进程提前退出（退出码 {_proc.returncode}），请查看控制台详情"
                 print(f"[Kimodo Bridge] ERROR: {_status}", flush=True)
                 return False, _status
             continue
@@ -176,7 +176,7 @@ def start(python_exe: str, model_name: str, use_offload: bool = False, progress_
         s = msg.get("status", "")
 
         if s == "loading":
-            _status = msg.get("message", "Loading…")
+            _status = msg.get("message", "正在加载…")
             print(f"[Kimodo Bridge] {_status}", flush=True)
             if progress_callback:
                 progress_callback(_status)
@@ -184,16 +184,16 @@ def start(python_exe: str, model_name: str, use_offload: bool = False, progress_
         elif s == "ready":
             _ready  = True
             _status = (
-                f"Ready — {msg.get('model', model_name)} "
-                f"on {msg.get('device', '?')} "
-                f"({msg.get('fps', '?')} fps)"
+                f"就绪：{msg.get('model', model_name)}，"
+                f"设备 {msg.get('device', '?')}，"
+                f"{msg.get('fps', '?')} fps"
             )
             print(f"[Kimodo Bridge] {_status}", flush=True)
             return True, _status
 
         elif s == "error":
-            err = msg.get("message", "Unknown error")
-            err_message = f"Failed: {err}"
+            err = msg.get("message", "未知错误")
+            err_message = f"失败：{err}"
             print(f"[Kimodo Bridge] ERROR: {err_message}", flush=True)
             stop()  # resets _status to "Stopped" — use local var
             return False, err_message
@@ -202,7 +202,7 @@ def start(python_exe: str, model_name: str, use_offload: bool = False, progress_
             print(f"[Kimodo Bridge] {msg}", flush=True)
 
     stop()
-    return False, "Timed out waiting for Kimodo (>7 min)"
+    return False, "等待 Kimodo 超时（超过 7 分钟）"
 
 
 def stop() -> None:
@@ -226,7 +226,7 @@ def stop() -> None:
         _ready  = False
         _busy   = False
         _cancel_requested = False
-        _status = "Stopped"
+        _status = "已停止"
 
 
 def is_running() -> bool:
@@ -281,12 +281,12 @@ def _recv_until_done(progress_callback) -> "tuple[bool, str]":
             # Hand the rest of this job's messages to a background drainer
             # and return immediately so the UI is released.
             threading.Thread(target=_drain_until_done, daemon=True).start()
-            return False, "Cancelled by user"
+            return False, "用户已取消"
 
         if not is_running():
             with _lock:
                 _busy = False
-            return False, "Kimodo process died during generation."
+            return False, "Kimodo 进程在生成过程中退出。"
 
         msg = _recv(timeout=0.2)
         if msg is None:
@@ -303,13 +303,13 @@ def _recv_until_done(progress_callback) -> "tuple[bool, str]":
                 _busy = False
             path = msg.get("path", "")
             if not path or not os.path.isfile(path):
-                return False, f"Output file not found: {path}"
+                return False, f"找不到输出文件：{path}"
             return True, path
 
         elif s == "error":
             with _lock:
                 _busy = False
-            return False, msg.get("message", "Generation failed")
+            return False, msg.get("message", "生成失败")
 
 
 def _begin_request(req: dict) -> "str | None":
@@ -318,8 +318,7 @@ def _begin_request(req: dict) -> "str | None":
     global _busy, _cancel_requested
     with _lock:
         if _busy:
-            return ("Kimodo is still finishing the previous request — "
-                    "wait for it to complete and try again.")
+            return "Kimodo 仍在处理上一个请求，请等待完成后再试。"
         _busy = True
         _cancel_requested = False
     try:
@@ -327,7 +326,7 @@ def _begin_request(req: dict) -> "str | None":
     except Exception as exc:
         with _lock:
             _busy = False
-        return f"Failed to send request: {exc}"
+        return f"发送请求失败：{exc}"
     return None
 
 
@@ -347,7 +346,7 @@ def generate_motion(
     Returns (success, file_path_or_error_message).
     """
     if not is_running():
-        return False, "Kimodo is not running — click 'Start Kimodo' first."
+        return False, "Kimodo 尚未运行，请先点击“启动 Kimodo”。"
 
     req = {
         "cmd": "generate",
@@ -386,7 +385,7 @@ def generate_motion_multi(
     Returns (success, file_path_or_error_message).
     """
     if not is_running():
-        return False, "Kimodo is not running — click 'Start Kimodo' first."
+        return False, "Kimodo 尚未运行，请先点击“启动 Kimodo”。"
 
     req = {
         "cmd": "generate_multi",
